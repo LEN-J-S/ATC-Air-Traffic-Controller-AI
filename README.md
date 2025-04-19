@@ -3,6 +3,8 @@
 
 Click here to view the app : https://bolt.new/~/sb1-dvkt2eg3
 
+![UI](UI.jpg)
+
 # Inspiration
 
 Emergencies in aviation demand split-second decisions, but pilots are often overwhelmed, and ATC lacks real-time visibility. We wanted to solve this by bridging the communication and awareness gap using AI.
