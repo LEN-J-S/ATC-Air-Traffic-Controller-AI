@@ -1,0 +1,132 @@
+#include <LiquidCrystal.h>
+#include <Servo.h>
+
+// LCD pin connections: RS, E, D4, D5, D6, D7
+LiquidCrystal lcd(46, 48, 38, 40, 42, 44);
+
+// Servo objects
+Servo servo2, servo3, servo4, servo5, servo6;
+
+String incomingData = "";
+
+void setup() {
+  Serial.begin(9600);
+  Serial1.begin(9600);
+
+  lcd.begin(20, 4);
+  lcd.setCursor(2, 0);
+  lcd.print(" SPD   ALT   HDG");
+
+  // Attach servos to designated pins
+  servo2.attach(6); // Flap Lever Pos
+  servo3.attach(4); // Elevator-L
+  servo4.attach(5); // Elevator-R
+  servo5.attach(2); // Heading
+  servo6.attach(3); // Pitch
+
+  // Initialize all servos at 90°
+  servo2.write(90);
+  servo3.write(90);
+  servo4.write(90);
+  servo5.write(90);
+  servo6.write(90);
+}
+
+void loop() {
+  while (Serial1.available()) {
+    char c = Serial1.read();
+    if (c == '\n') {
+      handleLine(incomingData);
+      incomingData = "";
+    } else {
+      incomingData += c;
+    }
+  }
+}
+
+void handleLine(String line) {
+  if (line.startsWith("LCD,ERROR,")) {
+    updateErrorLCD(line.substring(10)); // After "LCD,ERROR,"
+  } else if (line.startsWith("LCD,")) {
+    updateLCD(line.substring(4)); // Remove "LCD,"
+  } else if (line.startsWith("SERVO,")) {
+    updateServos(line.substring(6)); // Remove "SERVO,"
+  }
+}
+
+void updateErrorLCD(String errorMsg) {
+  // Clear rows 2 and 3
+  lcd.setCursor(0, 2);
+  lcd.print("                    ");
+  lcd.setCursor(0, 3);
+  lcd.print("                    ");
+
+  // Display message (up to 40 chars across 2 lines)
+  lcd.setCursor(0, 2);
+  lcd.print(errorMsg.substring(0, min(20, errorMsg.length())));
+
+  if (errorMsg.length() > 20) {
+    lcd.setCursor(0, 3);
+    lcd.print(errorMsg.substring(20, min(40, errorMsg.length())));
+  }
+}
+
+void updateLCD(String dataLine) {
+  int idx[4], count = 0;
+  for (int i = 0; i < dataLine.length() && count < 4; i++) {
+    if (dataLine.charAt(i) == ',') {
+      idx[count++] = i;
+    }
+  }
+
+  String spd = dataLine.substring(0, idx[0]);
+  String alt = dataLine.substring(idx[0] + 1, idx[1]);
+  String hdg = dataLine.substring(idx[1] + 1, idx[2]);
+  String lat = dataLine.substring(idx[2] + 1, idx[3]);
+  String lon = dataLine.substring(idx[3] + 1);
+
+  // Row 2 (SPD ALT HDG)
+  lcd.setCursor(0, 1);
+  lcd.print("                    ");
+  lcd.setCursor(0, 1);
+  lcd.print(padValue(spd) + " " + padValue(alt) + padValue(hdg));
+
+  // Row 3 (LAT)
+  lcd.setCursor(0, 2);
+  lcd.print("                    ");
+  lcd.setCursor(0, 2);
+  lcd.print("LAT:" + lat);
+
+  // Row 4 (LON)
+  lcd.setCursor(0, 3);
+  lcd.print("                    ");
+  lcd.setCursor(0, 3);
+  lcd.print("LON:" + lon);
+}
+
+void updateServos(String dataLine) {
+  int idx[4], count = 0;
+  for (int i = 0; i < dataLine.length() && count < 4; i++) {
+    if (dataLine.charAt(i) == ',') {
+      idx[count++] = i;
+    }
+  }
+
+  int hdg  = dataLine.substring(0, idx[0]).toInt();               // Heading
+  int pitch = dataLine.substring(idx[0] + 1, idx[1]).toInt();     // Pitch
+  int elevL = dataLine.substring(idx[1] + 1, idx[2]).toInt();     // Elevator-L
+  int elevR = dataLine.substring(idx[2] + 1, idx[3]).toInt();     // Elevator-R
+  int flap  = dataLine.substring(idx[3] + 1).toInt();             // Flap Lever Pos
+
+  // Apply values to servos
+  servo5.write(constrain(hdg, 0, 180));
+  servo6.write(constrain(pitch, 0, 180));
+  servo3.write(constrain(elevL, 0, 180));
+  servo4.write(constrain(elevR, 0, 180));
+  servo2.write(constrain(flap, 0, 180));
+}
+
+String padValue(String val) {
+  while (val.length() < 6) val = " " + val;
+  return val;
+}

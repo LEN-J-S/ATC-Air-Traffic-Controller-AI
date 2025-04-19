@@ -1,0 +1,85 @@
+import csv
+import time
+import serial
+
+# === CONFIGURATION ===
+csv_path = "OrganizedData.csv"
+port = "COM10"
+baudrate = 9600
+
+def format_numeric(val):
+    try:
+        num = float(val)
+        return f"{num:.4g}"
+    except:
+        return None
+
+ser = serial.Serial(port, baudrate)
+time.sleep(2)
+
+# Last known values
+last_display = ["-----"] * 5  # SPD, ALT, HDG, LAT, LON
+last_servos = ["90", "90", "90", "90", "90"]
+
+with open(csv_path, newline='') as csvfile:
+    reader = csv.reader(csvfile)
+    for row_index, row in enumerate(reader):
+        if row_index < 3:
+            continue  # Skip headers
+
+        # === DISPLAY FIELDS ===
+        spd = format_numeric(row[0]) if len(row) > 0 else None
+        alt = format_numeric(row[1]) if len(row) > 1 else None
+        lon = row[2].strip() if len(row) > 2 and row[2].strip() else None
+        lat = row[3].strip() if len(row) > 3 and row[3].strip() else None
+        hdg = format_numeric(row[4]) if len(row) > 4 else None
+
+        if spd: last_display[0] = spd
+        if alt: last_display[1] = alt
+        if hdg: last_display[2] = hdg
+        if lat: last_display[3] = lat
+        if lon: last_display[4] = lon
+
+        # === ERROR FIELDS ===
+        error_flag = row[12].strip() if len(row) > 12 else "0"
+        error_msg = row[13].strip() if len(row) > 13 else ""
+
+        if error_flag == "1" and error_msg:
+            lcd_line = f"LCD,ERROR,{error_msg}"
+        else:
+            lcd_line = "LCD," + ",".join(last_display)
+
+        ser.write((lcd_line + "\n").encode('utf-8'))
+        print(f"Sent to LCD: {lcd_line}")
+        time.sleep(1)
+
+        # === SERVO FIELDS ===
+        try:
+            heading = int(float(row[5].strip())) if len(row) > 5 and row[5].strip() else 90
+        except:
+            heading = 90
+        try:
+            pitch_raw = float(row[6].strip()) if len(row) > 6 and row[6].strip() else 0
+            pitch = int(max(0, min(180, 90 + pitch_raw)))
+        except:
+            pitch = 90
+        try:
+            elev_l_raw = float(row[7].strip()) if len(row) > 7 and row[7].strip() else 0
+            elev_l = int(max(0, min(180, 90 + elev_l_raw)))
+        except:
+            elev_l = 90
+        try:
+            elev_r_raw = float(row[8].strip()) if len(row) > 8 and row[8].strip() else 0
+            elev_r = int(max(0, min(180, 90 + elev_r_raw)))
+        except:
+            elev_r = 90
+
+        flap = row[9].strip() if len(row) > 9 and row[9].strip() else "Pos 1"
+        flap_map = {"Pos 1": 90, "Pos 2": 75, "Pos 3": 60, "Pos 4": 45, "Pos 5": 30}
+        flap_angle = flap_map.get(flap, 90)
+
+        last_servos = [str(heading), str(pitch), str(elev_l), str(elev_r), str(flap_angle)]
+        servo_line = "SERVO," + ",".join(last_servos)
+        ser.write((servo_line + "\n").encode('utf-8'))
+        print(f"Sent to Servos: {servo_line}")
+        time.sleep(1)
